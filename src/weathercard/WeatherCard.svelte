@@ -1,163 +1,147 @@
 <script>
-    export let weather;
-    export let index = 0;
-    export let useSymbols = true;
+    export let weatherData;
+    export let useSymbols = false;
 
     function formatDate(dateString) {
-        const date = new Date(dateString);
-        return {
-            day: new Intl.DateTimeFormat('de-DE', { weekday: 'long' }).format(date),
-            date: new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit' }).format(date)
-        };
+        try {
+            if (!dateString) return "Invalid date";
+
+            const date = new Date(dateString);
+
+            if (isNaN(date.getTime())) return "Invalid date";
+
+            return date.toLocaleDateString(undefined, {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+        } catch (e) {
+            console.error("Error formatting date:", e, "Date string was:", dateString);
+            return "Invalid date";
+        }
     }
 
-    $: formattedDate = formatDate(weather.forecastData);
-    $: rainProbability = weather.rain || 0;
+    // Helper function to get weather icon URL
+    function getWeatherIconUrl(iconCode) {
+        return `https://openweathermap.org/img/wn/${iconCode}@2x.png`;
+    }
 </script>
 
 <div class="weather-card">
-    <div class="card-header">
-        <h3>{formattedDate.day}</h3>
-        <p class="date">{formattedDate.date}</p>
+    <div class="date">{formatDate(weatherData.forecastData)}</div>
+
+    <div class="weather-info">
+        <div class="temperature-container">
+            <div class="current-temp">{Math.round(weatherData.temperature)}°C</div>
+            <div class="min-max">
+                <span class="min">{Math.round(weatherData.minTemparature)}°</span> /
+                <span class="max">{Math.round(weatherData.maxTemparature)}°</span>
+            </div>
+        </div>
+
+        <div class="weather-icon">
+            <img src={getWeatherIconUrl(weatherData.iconCode)} alt={weatherData.description} />
+            <div class="description">{weatherData.description}</div>
+        </div>
     </div>
 
-    <div class="card-body">
-        <img
-                src={`https://openweathermap.org/img/wn/${weather.iconCode}@2x.png`}
-                alt={weather.description}
-                class="weather-icon"
-        />
+    <div class="details">
+        <div class="detail-item">
+            <span class="label">Luftfeuchtigkeit:</span>
+            <span class="value">{weatherData.humidity}%</span>
+        </div>
 
-        <p class="weather-description">{weather.description}</p>
-
-        <div class="weather-details">
-            <div class="detail-row">
-                <div class="detail">
-                    {#if useSymbols}
-                        <i class="fas fa-temperature-low icon-min-temp"></i>
-                    {:else}
-                        <span>Min</span>
-                    {/if}
-                    <span>{weather.minTemparature.toFixed(1)}°C</span>
-                </div>
-
-                <div class="detail">
-                    {#if useSymbols}
-                        <i class="fas fa-temperature-high icon-max-temp"></i>
-                    {:else}
-                        <span>Max</span>
-                    {/if}
-                    <span>{weather.maxTemparature.toFixed(1)}°C</span>
-                </div>
-            </div>
-
-            <div class="detail-row">
-                <div class="detail">
-                    {#if useSymbols}
-                        <i class="fas fa-tint icon-humidity"></i>
-                    {:else}
-                        <span>Feucht.</span>
-                    {/if}
-                    <span>{weather.humidity}%</span>
-                </div>
-
-                <div class="detail">
-                    {#if useSymbols}
-                        <i class="fas fa-cloud-rain icon-rain"></i>
-                    {:else}
-                        <span>Regen</span>
-                    {/if}
-                    <span>{rainProbability}%</span>
-                </div>
-            </div>
+        <div class="detail-item">
+            <span class="label">Regenwahrscheinlichkeit:</span>
+            <span class="value">{weatherData.rain}%</span>
         </div>
     </div>
 </div>
 
-<svelte:head>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
-</svelte:head>
-
 <style>
     .weather-card {
-        background-color: white;
-        border-radius: 10px;
-        overflow: hidden;
-        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
-        height: 100%;
-        display: flex;
-        flex-direction: column;
+        background-color: var(--card-background);
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 12px var(--shadow-color);
+        transition: transform 0.2s;
     }
 
-    .card-header {
-        background: linear-gradient(135deg, #4299e1, #63b3ed);
-        color: white;
-        padding: 0.75rem;
-        text-align: center;
-    }
-
-    .card-header h3 {
-        margin: 0;
-        font-size: 1.1rem;
-        font-weight: 600;
-        text-transform: capitalize;
+    .weather-card:hover {
+        transform: translateY(-5px);
     }
 
     .date {
-        margin: 0.1rem 0 0;
-        font-size: 0.8rem;
-        opacity: 0.9;
+        font-size: 1.2rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        color: var(--text-color);
     }
 
-    .card-body {
-        padding: 1rem;
+    .weather-info {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+    }
+
+    .temperature-container {
         display: flex;
         flex-direction: column;
-        align-items: center;
+    }
+
+    .current-temp {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: var(--text-color);
+    }
+
+    .min-max {
+        font-size: 1rem;
+        color: #666;
+    }
+
+    .min {
+        color: #4299e1;
+    }
+
+    .max {
+        color: #f56565;
     }
 
     .weather-icon {
+        text-align: center;
+    }
+
+    .weather-icon img {
         width: 80px;
         height: 80px;
     }
 
-    .weather-description {
-        margin: 0 0 1rem;
+    .description {
         font-size: 1rem;
-        color: #333;
+        color: #666;
         text-transform: capitalize;
     }
 
-    .weather-details {
-        width: 100%;
-        display: flex;
-        flex-direction: column;
-        gap: 0.75rem;
+    .details {
+        border-top: 1px solid var(--border-color);
+        padding-top: 1rem;
     }
 
-    .detail-row {
+    .detail-item {
         display: flex;
         justify-content: space-between;
-        width: 100%;
-        padding-top: 0.75rem;
-        border-top: 1px solid #eee;
+        margin-bottom: 0.5rem;
     }
 
-    .detail {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 0.25rem;
-        font-size: 0.9rem;
-        min-width: 40%;
+    .label {
+        color: #666;
     }
 
-    .detail i {
-        font-size: 1.1rem;
+    .value {
+        font-weight: 600;
+        color: var(--text-color);
     }
-
-    .icon-humidity { color: #FFD700; }
-    .icon-rain { color: #4299e1; }
-    .icon-min-temp { color: #1E90FF; }
-    .icon-max-temp { color: #FF4500; }
 </style>

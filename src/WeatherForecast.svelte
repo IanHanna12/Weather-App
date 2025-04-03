@@ -12,12 +12,12 @@
     </div>
 
     <div class="weather-grid">
-        {#each weatherData as weather, index}
-            <WeatherCard {weather} {index} {useSymbols} />
+        {#each weatherData as item}
+            <WeatherCard weatherData={item} {useSymbols} />
         {/each}
     </div>
 {:else}
-    <div class="nos-data">
+    <div class="no-data">
         <p>Keine Wetterdaten verfügbar. Bitte suchen Sie nach einer Stadt.</p>
     </div>
 {/if}

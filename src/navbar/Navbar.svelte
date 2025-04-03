@@ -1,3 +1,9 @@
+<script>
+    export let city = 'Heilbronn';
+    export let days = 5;
+    export let lang = 'de';
+</script>
+
 <nav class="navbar">
     <div class="container">
         <div class="logo">
