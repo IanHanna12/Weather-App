@@ -6,6 +6,8 @@
     export let useSymbols = true; // Standardmäßig Symbole verwenden
 </script>
 
+
+
 {#if weatherData.length > 0}
     <div class="city-header">
         <h2>{city}</h2>
