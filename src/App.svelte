@@ -1,4 +1,4 @@
- <script>
+<script>
     import Navbar from "./navbar/Navbar.svelte";
     import WeatherForecast from "./WeatherForecast.svelte";
     import Footer from "./footer/Footer.svelte";
@@ -10,141 +10,81 @@
     let weatherData = [];
     let loading = false;
     let error = null;
-    let lastFetchTime = null;
     let isRecording = false;
     let isConnected = true;
     let triggerWord = "Wetter";
     let isListening = false;
+    let recognition;
 
     const API_BASE_URL = "http://localhost:8080";
 
+    function setupSpeechRecognition() {
+        if (typeof window === 'undefined') return;
 
-    // Speech recognition setup
-    let recognition;
-    let recognitionSupported = false;
-
-    function initSpeechRecognition() {
-        // Check if we're in a browser environment
-        if (typeof window === 'undefined') {
-            return;
-        }
-
-        // Safely check for SpeechRecognition support
         try {
-            // @ts-ignore - Ignore TypeScript errors for browser API detection
-            const isSpeechRecognitionSupported = 'SpeechRecognition' in window || 'webkitSpeechRecognition' in window;
-
-            if (!isSpeechRecognitionSupported) {
-                console.log("Speech Recognition API is not supported in this browser");
+            // @ts-ignore
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                console.log("Speech Recognition not supported");
                 return;
             }
 
-            recognitionSupported = true;
-
-            // @ts-ignore - Create the appropriate SpeechRecognition instance
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             recognition = new SpeechRecognition();
-
-            // Configure the recognition
             recognition.lang = lang === 'de' ? 'de-DE' : 'en-US';
             recognition.continuous = false;
-            recognition.interimResults = false;
 
-            // Set up event handlers
-            recognition.onstart = () => {
-                isRecording = true;
-            };
-
+            recognition.onstart = () => isRecording = true;
             recognition.onend = () => {
                 isRecording = false;
-
-                // Restart listening if continuous listening is enabled
-                if (isListening && recognitionSupported) {
-                    setTimeout(() => {
-                        try {
-                            recognition.start();
-                        } catch (e) {
-                            console.error("Fehler beim Neustarten der Spracherkennung:", e);
-                        }
-                    }, 300);
+                if (isListening) {
+                    setTimeout(() => recognition.start(), 300);
                 }
             };
 
             recognition.onresult = (event) => {
                 const transcript = event.results[0][0].transcript.toLowerCase();
-                console.log("Erkannt:", transcript);
+                console.log("Heard:", transcript);
 
-                if (transcript.includes(triggerWord.toLowerCase())) {
-                    // Extract city name after trigger word
-                    const parts = transcript.split(triggerWord.toLowerCase());
-                    if (parts.length > 1 && parts[1].trim()) {
-                        const command = parts[1].trim();
+                if (!transcript.includes(triggerWord.toLowerCase())) return;
 
-                        // Try to extract city and days
-                        let newCity = command;
-                        let newDays = 5; // Default
+                // Extract command after trigger word
+                const parts = transcript.split(triggerWord.toLowerCase());
+                if (parts.length < 2) return;
 
-                        // Check for number of days in the command
-                        const dayPatterns = [
-                            { regex: /(\d+)\s*tag(e)?/i, group: 1 },
-                            { regex: /für\s*(\d+)\s*tag(e)?/i, group: 1 },
-                            { regex: /nächsten\s*(\d+)\s*tag(e)?/i, group: 1 }
-                        ];
+                const command = parts[1].trim();
+                if (!command) return;
 
-                        for (const pattern of dayPatterns) {
-                            const match = command.match(pattern.regex);
-                            if (match && match[pattern.group]) {
-                                newDays = parseInt(match[pattern.group]);
-                                // Remove the days part from the city string
-                                newCity = command.replace(pattern.regex, '').trim();
-                                break;
-                            }
-                        }
-
-                        // Limit days to 1-5
-                        newDays = Math.min(Math.max(newDays, 1), 5);
-
-                        // Update state and fetch weather
-                        city = newCity;
-                        days = newDays;
-                        fetchWeather();
-                    }
-                }
+                // Parse command
+                parseVoiceCommand(command);
             };
 
-            recognition.onerror = (event) => {
-                console.error("Spracherkennung Fehler:", event.error);
-                isRecording = false;
-            };
-
-            // Start listening automatically
-            startContinuousListening();
-
+            isListening = true;
+            recognition.start();
         } catch (e) {
-            console.error("Fehler bei der Initialisierung der Spracherkennung:", e);
-            recognitionSupported = false;
+            console.error("Speech recognition error:", e);
         }
     }
 
-    function startContinuousListening() {
-        if (recognition && recognitionSupported) {
-            try {
-                isListening = true;
-                recognition.start();
-            } catch (e) {
-                console.error("Fehler beim Starten der Spracherkennung:", e);
+    function parseVoiceCommand(command) {
+        // Extract city and days from command
+        const words = command.trim().split(/\s+/);
+        let newDays = 5;
+        let cityWords = [];
+
+        for (let i = 0; i < words.length; i++) {
+            const num = parseInt(words[i]);
+            if (!isNaN(num)) {
+                newDays = Math.min(Math.max(num, 1), 5); // Limit between 1-5
+            } else {
+                cityWords.push(words[i]);
             }
         }
-    }
 
-    function stopContinuousListening() {
-        if (recognition && recognitionSupported) {
-            try {
-                isListening = false;
-                recognition.stop();
-            } catch (e) {
-                console.error("Fehler beim Stoppen der Spracherkennung:", e);
-            }
+        const newCity = cityWords.join(" ").trim();
+        if (newCity) {
+            city = newCity;
+            days = newDays;
+            fetchWeather();
         }
     }
 
@@ -154,14 +94,15 @@
         window.addEventListener('offline', () => isConnected = false);
     }
 
-    // Initialize speech recognition and connection check when component mounts
     onMount(() => {
-        initSpeechRecognition();
+        setupSpeechRecognition();
         checkConnection();
 
-        // Clean up on component unmount
         return () => {
-            stopContinuousListening();
+            if (recognition) {
+                isListening = false;
+                try { recognition.stop(); } catch(e) {}
+            }
         };
     });
 
@@ -176,100 +117,13 @@
             const response = await fetch(url);
 
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.error || `HTTP-Fehler: ${response.status}`);
+                throw new Error(`HTTP error: ${response.status}`);
             }
 
             const data = await response.json();
-            console.log("Rohe API-Antwort:", data);
-
-            // Process and group the data by day
-            if (Array.isArray(data)) {
-                // Group forecasts by day
-                const forecastsByDay = {};
-                const currentDateTime = new Date();
-
-                data.forEach(item => {
-                    // Extract just the date part (YYYY-MM-DD)
-                    const dateKey = item.forecastDate.split('T')[0];
-
-                    if (!forecastsByDay[dateKey]) {
-                        forecastsByDay[dateKey] = [];
-                    }
-
-                    forecastsByDay[dateKey].push({
-                        city: item.city || city,
-                        forecastData: item.forecastDate,
-                        forecastTime: new Date(item.forecastDate),
-                        temperature: item.temperature || 0,
-                        minTemparature: item.minTemperature || 0,
-                        maxTemparature: item.maxTemperature || 0,
-                        humidity: item.humidity || 0,
-                        description: item.description || '',
-                        iconCode: item.iconCode || '01d',
-                        rain: item.rain || 0
-                    });
-                });
-
-                // Create one entry per day with min/max values
-                weatherData = Object.keys(forecastsByDay).map(dateKey => {
-                    const forecastsForDay = forecastsByDay[dateKey];
-
-                    // Sort forecasts by time
-                    forecastsForDay.sort((a, b) => a.forecastTime.getTime() - b.forecastTime.getTime());
-
-                    // Choose the representative forecast for this day
-                    let dailyRepresentativeForecast;
-
-                    // For today, find forecast closest to current time
-                    if (dateKey === currentDateTime.toISOString().split('T')[0]) {
-                        const currentTime = currentDateTime.getTime();
-                        dailyRepresentativeForecast = forecastsForDay.reduce((closestForecast, currentForecast) => {
-                            const currentTimeDiff = Math.abs(currentForecast.forecastTime.getTime() - currentTime);
-                            const closestTimeDiff = Math.abs(closestForecast.forecastTime.getTime() - currentTime);
-                            return currentTimeDiff < closestTimeDiff ? currentForecast : closestForecast;
-                        }, forecastsForDay[0]);
-                    } else {
-                        // For future days, prefer noon forecast or use middle of day
-                        dailyRepresentativeForecast = forecastsForDay.find(forecast =>
-                            forecast.forecastData.includes('T12:00')
-                        ) || forecastsForDay[Math.floor(forecastsForDay.length / 2)];
-                    }
-
-                    // Get min/max temperatures for the day
-                    const dailyTemperatures = forecastsForDay.map(forecast => forecast.temperature);
-
-                    return {
-                        city: dailyRepresentativeForecast.city,
-                        forecastData: dailyRepresentativeForecast.forecastData,
-                        temperature: dailyRepresentativeForecast.temperature,
-                        minTemparature: Math.min(...dailyTemperatures),
-                        maxTemparature: Math.max(...dailyTemperatures),
-                        humidity: dailyRepresentativeForecast.humidity,
-                        description: dailyRepresentativeForecast.description,
-                        iconCode: dailyRepresentativeForecast.iconCode,
-                        rain: dailyRepresentativeForecast.rain
-                    };
-                }).slice(0, days);
-            } else {
-                // Handle single forecast data
-                weatherData = [{
-                    city: data.city || city,
-                    forecastData: data.forecastDate,
-                    temperature: data.temperature || 0,
-                    minTemparature: data.minTemperature || 0,
-                    maxTemparature: data.maxTemperature || 0,
-                    humidity: data.humidity || 0,
-                    description: data.description || '',
-                    iconCode: data.iconCode || '01d',
-                    rain: data.rain || 0
-                }];
-            }
-
-            lastFetchTime = new Date();
-            console.log("Verarbeitete Wetterdaten:", weatherData);
+            weatherData = processWeatherData(data);
         } catch (err) {
-            console.error('Fehler beim Laden der Wetterdaten:', err);
+            console.error('Error fetching weather:', err);
             error = err.message;
             weatherData = [];
         } finally {
@@ -277,11 +131,59 @@
         }
     }
 
-    function handleSearch(event) {
-        const { city: newCity, days: newDays } = event.detail;
-        city = newCity;
-        days = newDays;
-        fetchWeather();
+    function processWeatherData(data) {
+        if (!Array.isArray(data)) {
+            // Handle single data point
+            return [{
+                city: data.city || city,
+                forecastData: data.forecastDate,
+                temperature: data.temperature || 0,
+                minTemparature: data.minTemperature || 0,
+                maxTemparature: data.maxTemperature || 0,
+                humidity: data.humidity || 0,
+                description: data.description || '',
+                iconCode: data.iconCode || '01d',
+                rain: data.rain || 0
+            }];
+        }
+
+        // Group by date
+        const byDate = {};
+        data.forEach(item => {
+            const date = item.forecastDate.slice(0, 10);
+            if (!byDate[date]) byDate[date] = [];
+            byDate[date].push(item);
+        });
+
+        // Process each day
+        const processed = Object.keys(byDate).map(date => {
+            const items = byDate[date];
+            const noon = items.find(i => i.forecastDate.includes('T12:00')) || items[0];
+
+            // Calculate min/max temperatures
+            let minTemp = Infinity;
+            let maxTemp = -Infinity;
+
+            items.forEach(item => {
+                const temp = item.temperature || 0;
+                if (temp < minTemp) minTemp = temp;
+                if (temp > maxTemp) maxTemp = temp;
+            });
+
+            return {
+                city: noon.city || city,
+                forecastData: noon.forecastDate,
+                temperature: noon.temperature || 0,
+                minTemparature: minTemp === Infinity ? 0 : minTemp,
+                maxTemparature: maxTemp === -Infinity ? 0 : maxTemp,
+                humidity: noon.humidity || 0,
+                description: noon.description || '',
+                iconCode: noon.iconCode || '01d',
+                rain: noon.rain || 0
+            };
+        });
+
+        return processed.slice(0, days);
     }
 </script>
 
@@ -297,7 +199,7 @@
     </style>
 </svelte:head>
 
-<Navbar bind:city bind:days bind:lang on:search={handleSearch} />
+<Navbar bind:lang />
 
 <main>
     <div class="header-section">
@@ -323,10 +225,9 @@
             <ul>
                 <li>"<em>{triggerWord} Berlin</em>" - Wetter für Berlin (5 Tage)</li>
                 <li>"<em>{triggerWord} München 3 Tage</em>" - Wetter für München für 3 Tage</li>
-                <li>"<em>{triggerWord} Hamburg für 2 Tage</em>" - Wetter für Hamburg für 2 Tage</li>
             </ul>
             <p class="listening-status">
-                {isListening ? 'Spracherkennung ist aktiv - Sprechen Sie jetzt' : 'Spracherkennung wird initialisiert...'}
+                {isListening ? 'Spracherkennung ist aktiv' : 'Spracherkennung wird initialisiert...'}
             </p>
         </div>
     </div>
@@ -338,18 +239,9 @@
     {:else if error}
         <div class="error">
             <p>Fehler beim Laden der Wetterdaten: {error}</p>
-            {#if weatherData.length > 0}
-                <p class="using-cached">Zeige Fallback-Daten an.</p>
-            {/if}
         </div>
     {:else if weatherData.length > 0}
-        <WeatherForecast weatherData={weatherData.slice(0, days)} city={city} useSymbols={true} />
-
-        {#if lastFetchTime}
-            <div class="cache-info">
-                <p>Daten aktualisiert: {lastFetchTime.toLocaleString()}</p>
-            </div>
-        {/if}
+        <WeatherForecast weatherData={weatherData} city={city} useSymbols={true} />
     {:else}
         <div class="initial-state">
             <p>Sprechen Sie "{triggerWord} [Stadt]" um Wetterdaten zu laden.</p>
@@ -380,8 +272,7 @@
     h1 {
         font-size: 2.5rem;
         color: var(--text-color);
-        margin: 0;
-        margin-bottom: 1rem;
+        margin: 0 0 1rem 0;
     }
 
     h2 {
@@ -423,15 +314,9 @@
     }
 
     @keyframes pulse {
-        0% {
-            opacity: 1;
-        }
-        50% {
-            opacity: 0.6;
-        }
-        100% {
-            opacity: 1;
-        }
+        0% { opacity: 1; }
+        50% { opacity: 0.6; }
+        100% { opacity: 1; }
     }
 
     .search-container {
@@ -494,31 +379,13 @@
         color: #4a5568;
     }
 
-    .cache-info {
-        text-align: right;
-        font-size: 0.8rem;
-        color: #666;
-        margin-top: 1rem;
-    }
-
-    .using-cached {
-        font-style: italic;
-        color: #666;
-        margin-top: 0.5rem;
-    }
-
     @media (max-width: 768px) {
         .status-indicators {
             flex-direction: column;
             gap: 0.5rem;
         }
 
-        h1 {
-            font-size: 2rem;
-        }
-
-        h2 {
-            font-size: 1.3rem;
-        }
+        h1 { font-size: 2rem; }
+        h2 { font-size: 1.3rem; }
     }
 </style>
