@@ -51,7 +51,8 @@
                 const parts = transcript.split(triggerWord.toLowerCase());
                 if (parts.length < 2) return;
 
-                const command = parts[1].trim();
+                let command = parts[1].trim();
+                command = command.replace(/\.$/, '');
                 if (!command) return;
 
                 // Parse command
@@ -114,6 +115,10 @@
 
         try {
             const url = `${API_BASE_URL}/api/weather/${encodeURIComponent(city)}?days=${days}&lang=${lang}`;
+            // const url = `${API_BASE_URL}/api/weather/${encodeURIComponent(city)}`;
+            console.log("Fetching weather for:", city, "days:", days, "lang:", lang);
+            console.log("Full URL:", url);
+
             const response = await fetch(url);
 
             if (!response.ok) {
