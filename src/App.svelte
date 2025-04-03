@@ -151,7 +151,8 @@
         const byDate = {};
         data.forEach(item => {
             const date = item.forecastDate.slice(0, 10);
-            if (!byDate[date]) byDate[date] = [];
+            if (!byDate[date])
+                byDate[date] = [];
             byDate[date].push(item);
         });
 
